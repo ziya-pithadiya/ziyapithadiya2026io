@@ -1,117 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Portfolio</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GitHub Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <h1>My GitHub Repositories</h1>
+      <p>
+        This page loads every public repository from your GitHub account.
+        Update <code>GITHUB_USERNAME</code> in the script below.
+      </p>
+    </header>
 
-<link rel="stylesheet" href="style.css">
+    <main>
+      <section class="toolbar" aria-label="Repository controls">
+        <label for="sort-select">Sort by:</label>
+        <select id="sort-select">
+          <option value="updated">Recently Updated</option>
+          <option value="stars">Most Stars</option>
+          <option value="name">Name (A-Z)</option>
+        </select>
+      </section>
 
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+      <section aria-live="polite">
+        <p id="status" class="status">Loading repositories…</p>
+        <div id="repo-grid" class="repo-grid"></div>
+      </section>
+    </main>
 
-</head>
-
-<body>
-
-<header>
-    <nav class="navbar">
-        <h1 class="logo">MyPortfolio</h1>
-        <ul class="nav-links">
-            <li><a href="#home">Home</a></li>
-            <li><a href="#about">About</a></li>
-            <li><a href="#projects">Projects</a></li>
-            <li><a href="#contact">Contact</a></li>
+    <template id="repo-card-template">
+      <article class="repo-card">
+        <div class="repo-head">
+          <h2 class="repo-name"></h2>
+          <span class="repo-visibility"></span>
+        </div>
+        <p class="repo-description"></p>
+        <ul class="repo-meta">
+          <li class="repo-language"></li>
+          <li class="repo-stars"></li>
+          <li class="repo-updated"></li>
         </ul>
-    </nav>
-</header>
+        <a class="repo-link" target="_blank" rel="noopener noreferrer">View Repository</a>
+      </article>
+    </template>
 
+    <script>
+      const GITHUB_USERNAME = "YOUR_GITHUB_USERNAME";
+      const statusEl = document.getElementById("status");
+      const repoGrid = document.getElementById("repo-grid");
+      const sortSelect = document.getElementById("sort-select");
+      const repoTemplate = document.getElementById("repo-card-template");
 
-<section id="home" class="hero">
+      let repos = [];
 
-<div class="hero-content">
+      function formatDate(dateString) {
+        const date = new Date(dateString);
+        return new Intl.DateTimeFormat("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        }).format(date);
+      }
 
-<h2>Hello, I'm</h2>
-<h1>Your Name</h1>
+      function sortRepos(items, sortBy) {
+        const copy = [...items];
 
-<p>
-Student • Researcher • Creator  
-Building meaningful ideas and sharing knowledge.
-</p>
+        if (sortBy === "stars") {
+          return copy.sort((a, b) => b.stargazers_count - a.stargazers_count);
+        }
 
-<a href="#projects" class="btn">View My Work</a>
+        if (sortBy === "name") {
+          return copy.sort((a, b) => a.name.localeCompare(b.name));
+        }
 
-</div>
+        return copy.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      }
 
-</section>
+      function renderRepos(items) {
+        repoGrid.innerHTML = "";
 
+        if (items.length === 0) {
+          statusEl.textContent = "No repositories found.";
+          return;
+        }
 
-<section id="about" class="about">
+        const fragment = document.createDocumentFragment();
 
-<h2>About Me</h2>
+        items.forEach((repo) => {
+          const node = repoTemplate.content.cloneNode(true);
+          node.querySelector(".repo-name").textContent = repo.name;
+          node.querySelector(".repo-visibility").textContent = repo.private ? "Private" : "Public";
+          node.querySelector(".repo-description").textContent =
+            repo.description || "No description provided.";
+          node.querySelector(".repo-language").textContent = `Language: ${repo.language || "N/A"}`;
+          node.querySelector(".repo-stars").textContent = `★ ${repo.stargazers_count}`;
+          node.querySelector(".repo-updated").textContent = `Updated: ${formatDate(repo.updated_at)}`;
 
-<p>
-I am passionate about research, creativity, and building meaningful projects.
-My interests include technology, research writing, and problem solving.
-I enjoy creating ideas that combine knowledge with real-world impact.
-</p>
+          const link = node.querySelector(".repo-link");
+          link.href = repo.html_url;
+          link.textContent = "Open on GitHub";
 
-</section>
+          fragment.appendChild(node);
+        });
 
+        repoGrid.appendChild(fragment);
+        statusEl.textContent = `Loaded ${items.length} repositories.`;
+      }
 
-<section id="projects" class="projects">
+      async function fetchRepos() {
+        if (!GITHUB_USERNAME || GITHUB_USERNAME === "YOUR_GITHUB_USERNAME") {
+          statusEl.textContent = "Set your GitHub username in GITHUB_USERNAME to load repos.";
+          return;
+        }
 
-<h2>Projects</h2>
+        try {
+          statusEl.textContent = "Loading repositories…";
+          const response = await fetch(
+            `https://api.github.com/users/${GITHUB_USERNAME}/repos?per_page=100&type=owner`
+          );
 
-<div class="project-grid">
+          if (!response.ok) {
+            throw new Error(`GitHub API error: ${response.status}`);
+          }
 
-<div class="project-card">
-<h3>Habit Tracker Research</h3>
-<p>
-A research project exploring how habit tracking helps improve productivity
-and consistency in daily life.
-</p>
-</div>
+          repos = await response.json();
+          renderRepos(sortRepos(repos, sortSelect.value));
+        } catch (error) {
+          statusEl.textContent = "Could not load repositories. Check username or API limits.";
+          console.error(error);
+        }
+      }
 
-<div class="project-card">
-<h3>Sleep Research Paper</h3>
-<p>
-A detailed study about the importance of sleep for students and how
-sleep affects memory, focus, and health.
-</p>
-</div>
+      sortSelect.addEventListener("change", () => {
+        renderRepos(sortRepos(repos, sortSelect.value));
+      });
 
-<div class="project-card">
-<h3>Portfolio Website</h3>
-<p>
-A personal portfolio website built using HTML and CSS to showcase
-my work and ideas.
-</p>
-</div>
-
-</div>
-
-</section>
-
-
-<section id="contact" class="contact">
-
-<h2>Contact</h2>
-
-<p>
-If you'd like to collaborate or connect, feel free to reach out.
-</p>
-
-<a href="mailto:your@email.com" class="btn">Send Email</a>
-
-</section>
-
-
-<footer>
-
-<p>© 2026 Your Name | All Rights Reserved</p>
-
-</footer>
-
-
-</body>
+      fetchRepos();
+    </script>
+  </body>
 </html>
